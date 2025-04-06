@@ -1,0 +1,13 @@
+[project]
+name = "dashsockeriotictactoe"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "dash>=2.18.2",
+    "dash-mantine-components>=0.15.3",
+    "dash-socketio",
+    "loguru>=0.7.3",
+]
+
+[tool.uv.sources]
+dash-socketio = { git = "https://github.com/jimhendy/dash_socketio.git", rev = "feature/trigger_callback" }
