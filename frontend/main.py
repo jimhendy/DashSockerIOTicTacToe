@@ -73,44 +73,63 @@ def _str_index_in_list(
 
 app = Dash(__name__)
 
-app.layout = html.Div(
-    children=[
-        # html.Div(id="dummy-output", style={"display": "none"}),
-        DashSocketIO(
-            id="websocket",
-            url="ws://localhost:5000",
-        ),
-        html.Div(
-            style={
-                "display": "flex",
-                "justify-content": "center",
-                "flexDirection": "row",
-                "alignItems": "center",
-            },
-            children=[
-                html.Div(
-                    children=[
-                        html.H1("Available Games"),
-                        html.Div(id="available_games"),
-                    ],
-                ),
-                html.Div(
-                    id="create-game-container",
-                    style={
-                        "display": "flex",
-                        "flexDirection": "column",
-                        "alignItems": "center",
-                    },
-                    children=[
-                        html.Button(
-                            id="create-game-button",
-                            children="Create Game",
-                        )
-                    ],
-                ),
-            ],
-        ),
-    ]
+app.layout = dmc.MantineProvider(
+    html.Div(
+        children=[
+            # html.Div(id="dummy-output", style={"display": "none"}),
+            DashSocketIO(
+                id="websocket",
+                url="ws://localhost:5000",
+                debug=True,
+            ),
+            dcc.Interval(
+                id="interval",
+                interval=10 * 1_000,  # in milliseconds
+                n_intervals=0,
+            ),
+            dmc.Modal(
+                id="notifications-modal",
+                zIndex=1000,
+                size="lg",
+                title="Notifications",
+                opened=False,
+                centered=True,
+            ),
+            html.Div(
+                id="create-game-container",
+                style={
+                    "display": "flex",
+                    "flexDirection": "column",
+                    "alignItems": "center",
+                },
+                children=[
+                    html.Button(
+                        id="create-game-button",
+                        children="Create Game",
+                    )
+                ],
+            ),
+            html.Div(
+                style={
+                    "display": "flex",
+                    "justify-content": "center",
+                    "flexDirection": "row",
+                    "alignItems": "center",
+                },
+                children=[
+                    html.Div(
+                        children=[
+                            html.H1("Available Games"),
+                            html.Div(id="available_games"),
+                        ],
+                    ),
+                ],
+            ),
+            html.Div(
+                id="game-container",
+            )
+        ]
+    )
 )
 
 
@@ -152,6 +171,8 @@ def delete_game(n_clicks_list: list[int], delete_button_ids: list[str]):
     trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
     calling_index = _str_index_in_list(trigger_id, delete_button_ids)
     logger.info(f"{trigger_id=} {calling_index=}")
+    if calling_index is None:
+        raise PreventUpdate
     n_clicks = n_clicks_list[calling_index]
     logger.info(f"{n_clicks=}")
 
@@ -177,16 +198,89 @@ def update_available_games(response):
                 [
                     html.H5(game),
                     html.Button(
+                        id={"type": "join-game", "index": game},
+                        children="Join Game",
+                        n_clicks=0,
+                    ),
+                    html.Button(
                         id={"type": "delete-game", "index": game},
                         children="Delete Game",
                         n_clicks=0,
                     ),
-                ]
+                ],
+                style={
+                    "display": "flex",
+                    "flexDirection": "row",
+                    "alignItems": "center",
+                },
             )
             for game in games
         ]
     )
+    
+@app.callback(
+    Output("websocket", "send", allow_duplicate=True),
+    Input({"type": "join-game", "index": ALL}, "n_clicks"),
+    Input({"type": "join-game", "index": ALL}, "id"),
+    prevent_initial_call=True,
+)
+def join_game(n_clicks_list: list[int], join_button_ids: list[str]):
+    ctx = callback_context
+
+    if len(ctx.triggered) != 1:
+        raise PreventUpdate
+
+    trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    calling_index = _str_index_in_list(trigger_id, join_button_ids)
+    logger.info(f"{trigger_id=} {calling_index=}")
+    if calling_index is None:
+        raise PreventUpdate
+    n_clicks = n_clicks_list[calling_index]
+    logger.info(f"{n_clicks=}")
+
+    if not n_clicks:
+        raise PreventUpdate
+
+    logger.info(f"join_game triggered with {n_clicks=} by {ctx.triggered}")
+    button_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    game = _str_dict_key(button_id, "index")
+    return websocket_request(event="join_game", data={"game": game})
+
+
+@app.callback(
+    Output("game-container", "children"),
+    Input("websocket", "data-user_joined_game"),
+    prevent_initial_call=True,
+)
+def update_game_container(response):
+    """
+    Update the game container with the game data.
+    """
+    logger.info(f"update_game_container triggered with {response=}")
+    game = response["game"]
+    logger.info(f"{game=}")
+    return html.Div(
+        id="game",
+        children=[
+            html.Div(id="game-data", children=[html.Pre(game)]),
+        ],
+    )
+
+@app.callback(
+    Output("notifications-modal", "opened"),
+    Output("notifications-modal", "children"),
+    Input("websocket", "connected"),
+)
+def check_websocket_connected(connected):
+    """
+    Check if the websocket is connected and update the modal accordingly.
+    """
+    logger.info(f"Websocket connected: {connected}")
+    if not connected:
+        return True, "Websocket disconnected. Attempting to reconnect..."
+    else:
+        return False, None
 
 
 if __name__ == "__main__":
-    app.run_server(debug=False)
+    app.run(debug=True)

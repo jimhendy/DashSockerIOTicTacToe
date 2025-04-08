@@ -3,7 +3,7 @@ name = "dashsockeriotictactoe"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-    "dash>=2.18.2",
+    "dash>=3",
     "dash-mantine-components>=0.15.3",
     "dash-socketio",
     "loguru>=0.7.3",

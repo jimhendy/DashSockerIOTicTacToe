@@ -39,6 +39,7 @@ def handle_disconnect():
         logger.info(f"User {sid} disconnected")
     else:
         logger.info(f"Unkown user with sid {sid} disconnected")
+        
 
 
 @socketio.on("available_rooms")
@@ -60,6 +61,16 @@ def handle_delete_game(data):
     room = data["game"]
     GAMES.remove(room)
     handle_available_rooms()
+    
+@socketio.on("join_game")
+def handle_join_game(data):
+    logger.debug(f"join_game triggered with {data=}")
+    room = data["game"]
+    sid = request.sid
+    USER_TO_ROOM[sid] = room
+    
+    join_room(room, sid=sid)
+    emit("user_joined_game", {"game": room, "sid": sid}, room=room)
 
 if __name__ == "__main__":
     socketio.run(app)
